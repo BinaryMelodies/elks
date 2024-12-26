@@ -172,9 +172,10 @@ extern volatile struct elks_cpu_s elks_cpu;
 void db_printf(const char *, ...)
     __attribute__((format(printf,1,2)));
 int elks_syscall(void);
+void set_old_syscalls(void);
 void minix_syscall(void);
 void elks_pid_init(void);
 pid_t elks_to_linux_pid(int16_t);
 int16_t linux_to_elks_pid(pid_t);
 
-int reboot(int magic1, int magic2, int magic3);
+int reboot(int magic1, int magic2, int magic3, void *arg);

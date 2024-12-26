@@ -23,12 +23,17 @@
 #include <dirent.h>
 #include <sys/time.h>
 #include <sys/ptrace.h>
+#include <sys/socket.h>
 #include "elks.h"
 
 #include "efile.h"
 
 #ifdef DEBUG
 #define dbprintf(x) db_printf x
+#elif defined STRACE
+#include <stdarg.h>
+static void strace(const char * fmt, ...);
+#define dbprintf(x) strace x
 #else
 #define dbprintf(x)
 #endif
@@ -246,9 +251,23 @@ elks_chown(int bx, int cx, int dx, int di, int si)
     return chown(ELKS_PTR(char, bx), cx, dx);
 }
 
-#define sys_brk elks_brk
+#define sys_old_brk elks_old_brk
+static int elks_old_brk(int bx, int cx, int dx, int di, int si)
+{
+	dbprintf(("old_brk(%d)\n", bx));
+	if (brk_at >= elks_cpu.regs.xsp
+		? bx < brk_at
+		: bx >= elks_cpu.regs.xsp)
+	{
+		errno = ENOMEM;
+		return -1;
+	}
+	return 0;
+}
+
+#define sys_new_brk elks_new_brk
 static int
-elks_brk(int bx, int cx, int dx, int di, int si)
+elks_new_brk(int bx, int cx, int dx, int di, int si)
 {
     dbprintf(("brk(%d)\n", bx));
     brk_at = bx;
@@ -695,15 +714,121 @@ elks_reboot(int bx, int cx, int dx, int di, int si)
     switch (dx) {
         /* graceful shutdown, C-A-D off, kill -? 1 */
     case 0:
-        return reboot(0xfee1dead, 672274793, 0);
+        return reboot(0xfee1dead, 672274793, 0, NULL);
         /* Enable C-A-D */
     case 0xCAD:
-        return reboot(0xfee1dead, 672274793, 0x89abcdef);
+        return reboot(0xfee1dead, 672274793, 0x89abcdef, NULL);
         /* Time to die! */
     case 0xD1E:
-        return reboot(0xfee1dead, 672274793, 0x1234567);
+        return reboot(0xfee1dead, 672274793, 0x1234567, NULL);
     }
     return -1;
+}
+
+/****************************************************************************/
+/* New System Functions! */
+
+static void
+squash_fd_set(fd_set * fds, int fds16)
+{
+   if( fds16 )
+   {
+      FD_ZERO(fds);
+      memcpy(fds, ELKS_PTR(void, fds16), sizeof(uint32_t));
+   }
+}
+
+static void
+unsquash_fd_set(fd_set * fds, int fds16)
+{
+   if( fds16 )
+   {
+      memcpy(ELKS_PTR(void, fds16), fds, sizeof(uint32_t));
+   }
+}
+
+#define sys_select elks_select
+static int
+elks_select(int bx, int cx, int dx, int di, int si)
+{
+   struct timeval tv, * pv = 0;
+   int ax;
+   fd_set readfds, writefds, exceptfds;
+
+   dbprintf(("select(%d,%d,%d,%d,%d)\n",bx,cx,dx,di,si));
+
+   squash_fd_set(&readfds, cx);
+   squash_fd_set(&writefds, dx);
+   squash_fd_set(&exceptfds, di);
+
+   if( si )
+   {
+      pv = &tv;
+      tv.tv_sec  = ELKS_PEEK(long, si);
+      tv.tv_usec = ELKS_PEEK(long, si+4);
+   }
+
+   ax = select(bx, cx ? &readfds : 0, dx ? &writefds : 0, di ? &exceptfds : 0, pv);
+
+   unsquash_fd_set(&readfds, cx);
+   unsquash_fd_set(&writefds, dx);
+   unsquash_fd_set(&exceptfds, di);
+
+   if( ax > 0 && si )
+   {
+      pv = &tv;
+      ELKS_POKE(long, si, tv.tv_sec);
+      ELKS_POKE(long, si+4, tv.tv_usec);
+   }
+
+   return ax;
+}
+
+#define sys_socket elks_socket
+static int
+elks_socket(int bx, int cx, int dx, int di, int si)
+{
+   dbprintf(("socket(%d,%d,%d)\n",bx,cx,dx));
+   return socket(bx, cx, dx);
+}
+
+#define sys_bind elks_bind
+static int
+elks_bind(int bx, int cx, int dx, int di, int si)
+{
+   dbprintf(("bind(%d,%d,%d)\n",bx,cx,dx));
+   return bind(bx, ELKS_PTR(void, cx), dx);
+}
+
+#define sys_listen elks_listen
+static int
+elks_listen(int bx, int cx, int dx, int di, int si)
+{
+   dbprintf(("listen(%d,%d,%d)\n",bx,cx));
+   return listen(bx, cx);
+}
+
+#define sys_accept elks_accept
+static int
+elks_accept(int bx, int cx, int dx, int di, int si)
+{
+   int r;
+   uint16_t * lp = ELKS_PTR(uint16_t, dx);
+   socklen_t addrlen;
+
+   dbprintf(("accept(%d,%d,%d)\n",bx,cx,dx));
+   r = accept(bx, ELKS_PTR(void, cx), &addrlen);
+
+   *lp = addrlen;
+   return r;
+}
+
+#define sys_connect elks_connect
+static int
+elks_connect(int bx, int cx, int dx, int di, int si)
+{
+   dbprintf(("connect(%d,%d,%d)\n",bx,cx,dx));
+   return connect(bx, ELKS_PTR(void, cx), dx);
 }
 
 /****************************************************************************/
@@ -887,6 +1012,17 @@ static funcp jump_tbl[] = {
     elks_enosys
 };
 
+void
+set_old_syscalls(void)
+{
+	jump_tbl[17] = sys_old_brk;
+	jump_tbl[69] = sys_socket;
+	jump_tbl[70] = sys_bind;
+	jump_tbl[71] = sys_listen;
+	jump_tbl[72] = sys_accept;
+	jump_tbl[73] = sys_connect;
+}
+
 int
 elks_syscall(void)
 {
@@ -909,3 +1045,17 @@ elks_syscall(void)
     else
         return -errno;
 }
+
+#ifdef STRACE
+#undef strace
+static void
+strace(const char * fmt, ...)
+{
+  va_list ptr;
+  int rv;
+  va_start(ptr, fmt);
+  rv = vfprintf(stderr,fmt,ptr);
+  va_end(ptr);
+  fflush(stderr);
+}
+#endif
