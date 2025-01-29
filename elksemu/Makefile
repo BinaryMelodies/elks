@@ -19,6 +19,20 @@ ifeq ($(CFLAGS),)
 CFLAGS=-O $(DEFS)
 endif
 
+ifdef USE_VM86
+CFLAGS+=-m32 -DUSE_VM86
+else
+ifdef USE_X86EMU
+CFLAGS+=-DUSE_X86EMU=1 -lx86emu
+else
+ifdef USE_PTRACE
+CFLAGS+=-DUSE_PTRACE=1
+else
+$(error One of USE_PTRACE, USE_X86EMU, USE_VM86 must be defined)
+endif
+endif
+endif
+
 # Turn on elkemu's strace like facility.
 # DEFS=-DDEBUG
 
@@ -93,7 +107,7 @@ install: elksemu
 	install -s -o root -g root -m 4555 elksemu $(DIST)/lib/elksemu
 
 clean realclean:
-	rm -f $(OBJ) binfmt_elks.o elksemu strace_elksemu call_tab.v defn_tab.v efile.h
+	rm -f $(OBJ) $(OBJ_STRACE) binfmt_elks.o elksemu strace_elksemu call_tab.v defn_tab.v efile.h
 
 module: binfmt_elks.o
 
@@ -114,3 +128,4 @@ binfmt_elks.o:	binfmt_elks.c
 #MODCFLAGS=-O -fomit-frame-pointer -D__KERNEL__ -DMODULE -DCONFIG_MODVERSIONS
 
 .PHONY: all
+
