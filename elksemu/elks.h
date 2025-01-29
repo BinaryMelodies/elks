@@ -133,7 +133,6 @@ struct __attribute__((packed)) minix_reloc
 
 #if USE_VM86
 #define PARAGRAPH(x) (((unsigned int)(x))>>4)
-// TODO
 #define ELKS_PTR(_t,x)	  ((_t *) ((elks_cpu.xds<<4)+((x)&0xFFFFU)) )
 #define ELKS_PEEK(_t,x)	(*((_t *) ((elks_cpu.xds<<4)+((x)&0xFFFFU)) ))
 #define ELKS_POKE(_t,x,_v)	\
