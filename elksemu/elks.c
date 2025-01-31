@@ -11,24 +11,20 @@
 #include <stdlib.h>
 #include <sys/types.h>
 #include <string.h>
-#if USE_PTRACE
-#include <unistd.h>
-#endif
 #include <stdarg.h>
 #include <fcntl.h>
 #include <signal.h>
-#if USE_PTRACE
-#include <sched.h>
-#endif
 #include <errno.h>
 #include <stdint.h>
 #include <sys/stat.h>
+#include <sys/syscall.h>
+#include <sys/types.h>
 #if !USE_X86EMU
 #include <sys/mman.h>
 #endif
-#include <sys/syscall.h>
-#include <sys/types.h>
 #if USE_PTRACE
+#include <unistd.h>
+#include <sched.h>
 #include <sys/ptrace.h>
 #include <sys/wait.h>
 #include <asm/ldt.h>
