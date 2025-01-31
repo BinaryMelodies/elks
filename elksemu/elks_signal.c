@@ -11,6 +11,7 @@
 #include "elks.h"
 
 static int elks_sigtrap_ip = -1, elks_sigtrap_cs = -1;
+int elks_far_sigtrap = 1;
 
 void
 sig_trap(int signo)
@@ -26,12 +27,18 @@ sig_trap(int signo)
 #endif
     elks_cpu.xsp -= 2;
     ELKS_POKE(unsigned short, elks_cpu.xsp, signo);
-    elks_cpu.xsp -= 2;
-    ELKS_POKE(unsigned short, elks_cpu.xsp, elks_cpu.xcs);
+    if (elks_far_sigtrap)
+    {
+        elks_cpu.xsp -= 2;
+        ELKS_POKE(unsigned short, elks_cpu.xsp, elks_cpu.xcs);
+    }
     elks_cpu.xsp -= 2;
     ELKS_POKE(unsigned short, elks_cpu.xsp, elks_cpu.xip);
     elks_cpu.xip = elks_sigtrap_ip;
-    elks_cpu.xcs = elks_sigtrap_cs;
+    if (elks_far_sigtrap)
+    {
+        elks_cpu.xcs = elks_sigtrap_cs;
+    }
 #if USE_PTRACE
     if (ptrace(PTRACE_SETREGS, child, NULL, &elks_cpu.regs) != 0)
         return;

@@ -1023,6 +1023,7 @@ set_old_syscalls(void)
 	jump_tbl[71] = sys_listen;
 	jump_tbl[72] = sys_accept;
 	jump_tbl[73] = sys_connect;
+	elks_far_sigtrap = 0;
 }
 
 int

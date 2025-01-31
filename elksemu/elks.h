@@ -252,6 +252,7 @@ extern const char *emu_prog;
 extern unsigned char * elks_base, *elks_data_base;
 extern uint16_t brk_at;
 extern volatile elks_cpu_t elks_cpu;
+extern int elks_far_sigtrap;
 
 void db_printf(const char *, ...)
     __attribute__((format(printf,1,2)));
