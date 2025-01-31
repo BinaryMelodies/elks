@@ -15,11 +15,7 @@ static int elks_sigtrap_ip = -1, elks_sigtrap_cs = -1;
 void
 sig_trap(int signo)
 {
-#if USE_VM86
-	// TODO
-#elif USE_X86EMU
-	// TODO
-#elif USE_PTRACE
+#if USE_PTRACE
     pid_t child = elks_cpu.child, pid;
     int status;
     kill(elks_cpu.child, SIGSTOP);
@@ -27,6 +23,7 @@ sig_trap(int signo)
         if (errno != ESRCH)
             return;
     }
+#endif
     elks_cpu.xsp -= 2;
     ELKS_POKE(unsigned short, elks_cpu.xsp, signo);
     elks_cpu.xsp -= 2;
@@ -35,6 +32,7 @@ sig_trap(int signo)
     ELKS_POKE(unsigned short, elks_cpu.xsp, elks_cpu.xip);
     elks_cpu.xip = elks_sigtrap_ip;
     elks_cpu.xcs = elks_sigtrap_cs;
+#if USE_PTRACE
     if (ptrace(PTRACE_SETREGS, child, NULL, &elks_cpu.regs) != 0)
         return;
     kill(elks_cpu.child, SIGCONT);
